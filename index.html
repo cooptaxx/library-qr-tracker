@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Library QR Tracker</title>
+<script src="https://cdn.jsdelivr.net/npm/qrcode/build/qrcode.min.js"></script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: system-ui, sans-serif; background: #f5f5f3; color: #1a1a1a; min-height: 100vh; }
+  .page { max-width: 680px; margin: 0 auto; padding: 2rem 1rem; }
+  h1 { font-size: 22px; font-weight: 500; margin-bottom: 4px; }
+  .subtitle { font-size: 14px; color: #666; margin-bottom: 1.5rem; }
+  .card { background: #fff; border: 1px solid #e5e5e3; border-radius: 12px; padding: 1rem 1.25rem; margin-bottom: 12px; }
+  .section-label { font-size: 11px; font-weight: 500; color: #888; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 10px; }
+  input[type=text] { font-size: 14px; padding: 8px 12px; border-radius: 8px; border: 1px solid #ddd; background: #fafaf8; color: #1a1a1a; width: 100%; margin-bottom: 8px; }
+  input[type=text]:focus { outline: none; border-color: #888; }
+  .btn { font-size: 13px; padding: 8px 16px; border-radius: 8px; border: 1px solid #ddd; background: transparent; color: #1a1a1a; cursor: pointer; }
+  .btn:hover { background: #f5f5f3; }
+  .btn.primary { background: #1a1a1a; color: #fff; border-color: #1a1a1a; }
+  .btn.primary:hover { background: #333; }
+  .btn.danger { color: #c0392b; border-color: #f5c6c3; }
+  .btn.danger:hover { background: #fdf0ef; }
+  .btn.small { font-size: 12px; padding: 4px 10px; }
+  .events-list { display: flex; flex-direction: column; gap: 10px; }
+  .event-card { background: #fff; border: 1px solid #e5e5e3; border-radius: 12px; padding: 1rem 1.25rem; }
+  .event-name { font-size: 15px; font-weight: 500; }
+  .event-url { font-size: 12px; color: #888; margin-top: 2px; word-break: break-all; }
+  .event-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
+  .event-btns { display: flex; gap: 6px; flex-shrink: 0; }
+  .stats-row { display: flex; align-items: center; gap: 12px; margin-top: 10px; }
+  .click-badge { display: inline-flex; align-items: center; gap: 6px; padding: 5px 12px; background: #f5f5f3; border-radius: 8px; font-size: 13px; color: #666; }
+  .click-count { font-size: 20px; font-weight: 500; color: #1a1a1a; }
+  .added-date { font-size: 11px; color: #aaa; margin-left: auto; }
+  .empty { text-align: center; padding: 2rem; color: #aaa; font-size: 14px; }
+  .notice { font-size: 12px; color: #444; padding: 10px 12px; background: #f0f4ff; border-radius: 8px; margin-bottom: 1.5rem; line-height: 1.6; }
+  .modal-bg { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.45); z-index: 100; align-items: center; justify-content: center; }
+  .modal-bg.open { display: flex; }
+  .modal-box { background: #fff; border-radius: 12px; padding: 1.5rem; max-width: 300px; width: 90%; text-align: center; }
+  .modal-title { font-size: 15px; font-weight: 500; margin-bottom: 1rem; }
+  .modal-sub { font-size: 11px; color: #888; margin-top: 8px; word-break: break-all; }
+  .modal-actions { display: flex; gap: 8px; justify-content: center; margin-top: 1rem; }
+  #redirect-screen { display:none; position:fixed; inset:0; background:#fff; align-items:center; justify-content:center; flex-direction:column; gap:12px; font-family:system-ui,sans-serif; }
+  #redirect-screen.show { display:flex; }
+  .spinner { width:32px; height:32px; border:3px solid #eee; border-top-color:#1a1a1a; border-radius:50%; animation: spin 0.7s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+
+<div id="redirect-screen">
+  <div class="spinner"></div>
+  <p style="font-size:14px;color:#666;">Redirecting you...</p>
+</div>
+
+<div class="page" id="main-page">
+  <h1>Library event QR tracker</h1>
+  <p class="subtitle">Generate QR codes for events and track how many times each is scanned.</p>
+
+  <div class="notice">
+    Scan counts are saved in this browser. Always manage your events from the same device and browser to keep your counts accurate.
+  </div>
+
+  <div class="card" style="margin-bottom:1.5rem;">
+    <div class="section-label">Add new event</div>
+    <input type="text" id="event-name" placeholder="Event name (e.g. Story Time – May)" />
+    <input type="text" id="event-url" placeholder="Destination URL (e.g. https://yourlibrary.org/events)" />
+    <div style="display:flex;justify-content:flex-end;">
+      <button class="btn primary" onclick="addEvent()">Add event</button>
+    </div>
+  </div>
+
+  <div class="section-label">Your events</div>
+  <div class="events-list" id="events-list">
+    <div class="empty">No events yet — add one above.</div>
+  </div>
+</div>
+
+<div class="modal-bg" id="qr-modal">
+  <div class="modal-box">
+    <div class="modal-title" id="modal-title"></div>
+    <div id="qr-render" style="display:flex;justify-content:center;"></div>
+    <div class="modal-sub" id="modal-url-display"></div>
+    <div class="modal-actions">
+      <button class="btn" onclick="downloadQR()">Download PNG</button>
+      <button class="btn primary" onclick="closeModal()">Done</button>
+    </div>
+  </div>
+</div>
+
+<script>
+let events = [];
+let activeId = null;
+
+function load() {
+  try { const s = localStorage.getItem('libqr_v4'); if(s) events = JSON.parse(s); } catch(e){}
+}
+function save() {
+  try { localStorage.setItem('libqr_v4', JSON.stringify(events)); } catch(e){}
+}
+
+// The QR URL encodes both the event ID and the destination URL directly.
+// Format: https://yoursite.github.io/library-qr-tracker/?id=EVENT_ID&to=ENCODED_URL
+// So any device can redirect without needing localStorage.
+function trackingURL(id, destUrl) {
+  const base = location.origin + location.pathname;
+  return base + '?id=' + encodeURIComponent(id) + '&to=' + encodeURIComponent(destUrl);
+}
+
+function addEvent() {
+  const name = document.getElementById('event-name').value.trim();
+  let url = document.getElementById('event-url').value.trim();
+  if (!name || !url) { alert('Please fill in both fields.'); return; }
+  if (!url.startsWith('http')) url = 'https://' + url;
+  const id = 'e' + Date.now();
+  events.push({ id, name, url, clicks: 0, date: new Date().toLocaleDateString('en-GB') });
+  save(); render();
+  document.getElementById('event-name').value = '';
+  document.getElementById('event-url').value = '';
+}
+
+function deleteEvent(id) {
+  if (!confirm('Delete this event?')) return;
+  events = events.filter(e => e.id !== id);
+  save(); render();
+}
+
+function resetClicks(id) {
+  const ev = events.find(e => e.id === id);
+  if (!ev || !confirm('Reset clicks for "' + ev.name + '"?')) return;
+  ev.clicks = 0; save(); render();
+}
+
+function showQR(id) {
+  const ev = events.find(e => e.id === id);
+  if (!ev) return;
+  activeId = id;
+  document.getElementById('modal-title').textContent = ev.name;
+  const turl = trackingURL(id, ev.url);
+  document.getElementById('modal-url-display').textContent = 'Points to: ' + ev.url;
+  const container = document.getElementById('qr-render');
+  container.innerHTML = '';
+  const canvas = document.createElement('canvas');
+  container.appendChild(canvas);
+  QRCode.toCanvas(canvas, turl, { width: 220, margin: 2, color: { dark: '#000000', light: '#ffffff' }}, function(err) {
+    if (err) container.innerHTML = '<p style="color:red;font-size:13px;">Error: ' + err.message + '</p>';
+  });
+  document.getElementById('qr-modal').classList.add('open');
+}
+
+function closeModal() {
+  document.getElementById('qr-modal').classList.remove('open');
+  activeId = null;
+}
+
+function downloadQR() {
+  const canvas = document.querySelector('#qr-render canvas');
+  if (!canvas) return;
+  const ev = events.find(e => e.id === activeId);
+  const a = document.createElement('a');
+  a.download = (ev ? ev.name.replace(/[^a-z0-9]/gi,'_') : 'qr') + '.png';
+  a.href = canvas.toDataURL('image/png');
+  a.click();
+}
+
+function render() {
+  const list = document.getElementById('events-list');
+  if (!events.length) { list.innerHTML = '<div class="empty">No events yet — add one above.</div>'; return; }
+  list.innerHTML = events.map(ev => `
+    <div class="event-card">
+      <div class="event-header">
+        <div>
+          <div class="event-name">${ev.name}</div>
+          <div class="event-url">${ev.url}</div>
+        </div>
+        <div class="event-btns">
+          <button class="btn" onclick="showQR('${ev.id}')">QR code</button>
+          <button class="btn danger" onclick="deleteEvent('${ev.id}')">Delete</button>
+        </div>
+      </div>
+      <div class="stats-row">
+        <div class="click-badge">
+          <span class="click-count">${ev.clicks}</span>
+          <span>scans</span>
+        </div>
+        <button class="btn small" onclick="resetClicks('${ev.id}')">Reset</button>
+        <span class="added-date">Added ${ev.date}</span>
+      </div>
+    </div>
+  `).join('');
+}
+
+function checkRedirect() {
+  const p = new URLSearchParams(location.search);
+  const id = p.get('id');
+  const to = p.get('to');
+  if (!id || !to) return false;
+
+  // Show redirect screen immediately
+  document.getElementById('redirect-screen').classList.add('show');
+  document.getElementById('main-page').style.display = 'none';
+
+  // Log the click if this event exists in local storage on this device
+  const ev = events.find(e => e.id === id);
+  if (ev) { ev.clicks++; save(); }
+
+  // Redirect regardless
+  setTimeout(() => { location.replace(decodeURIComponent(to)); }, 300);
+  return true;
+}
+
+load();
+if (!checkRedirect()) {
+  render();
+}
+</script>
+</body>
+</html>
