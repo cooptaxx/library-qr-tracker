@@ -15,20 +15,21 @@
   .section-label { font-size: 11px; font-weight: 500; color: #888; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 10px; }
   input[type=text] { font-size: 14px; padding: 8px 12px; border-radius: 8px; border: 1px solid #ddd; background: #fafaf8; color: #1a1a1a; width: 100%; margin-bottom: 8px; }
   input[type=text]:focus { outline: none; border-color: #888; }
-  .btn { font-size: 13px; padding: 8px 16px; border-radius: 8px; border: 1px solid #ddd; background: transparent; color: #1a1a1a; cursor: pointer; }
+  .btn { font-size: 13px; padding: 8px 16px; border-radius: 8px; border: 1px solid #ddd; background: transparent; color: #1a1a1a; cursor: pointer; white-space: nowrap; }
   .btn:hover { background: #f5f5f3; }
   .btn.primary { background: #1a1a1a; color: #fff; border-color: #1a1a1a; }
   .btn.primary:hover { background: #333; }
   .btn.danger { color: #c0392b; border-color: #f5c6c3; }
   .btn.danger:hover { background: #fdf0ef; }
   .btn.small { font-size: 12px; padding: 4px 10px; }
+  .btn.copied { color: #2e7d32; border-color: #c8e6c9; background: #f1f8f1; }
   .btn:disabled { opacity: 0.4; cursor: not-allowed; }
   .events-list { display: flex; flex-direction: column; gap: 10px; }
   .event-card { background: #fff; border: 1px solid #e5e5e3; border-radius: 12px; padding: 1rem 1.25rem; }
   .event-name { font-size: 15px; font-weight: 500; }
   .event-url { font-size: 12px; color: #888; margin-top: 2px; word-break: break-all; }
   .event-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
-  .event-btns { display: flex; gap: 6px; flex-shrink: 0; }
+  .event-btns { display: flex; gap: 6px; flex-shrink: 0; flex-wrap: wrap; justify-content: flex-end; }
   .stats-row { display: flex; align-items: center; gap: 12px; margin-top: 10px; }
   .click-badge { display: inline-flex; align-items: center; gap: 6px; padding: 5px 12px; background: #f5f5f3; border-radius: 8px; font-size: 13px; color: #666; }
   .click-count { font-size: 20px; font-weight: 500; color: #1a1a1a; }
@@ -57,10 +58,10 @@
 
 <div class="page" id="main-page">
   <h1>Library event QR tracker</h1>
-  <p class="subtitle">Generate QR codes for events and track how many times each is scanned.</p>
+  <p class="subtitle">Generate QR codes and tracking links for events. Every scan or click is counted.</p>
 
   <div class="notice">
-    Scan counts are stored in the cloud — every scan on any device updates the count in real time.
+    Each event has a QR code <strong>and</strong> a tracking link — both count in the same total. Share the link in emails, social media, or newsletters.
   </div>
 
   <div class="error-box" id="error-box"></div>
@@ -132,7 +133,7 @@ async function loadEvents() {
     events = await res.json();
     render();
   } catch(e) {
-    showError('Could not connect to database: ' + e.message + '. Make sure you have run the SQL setup step in Supabase.');
+    showError('Could not connect to database: ' + e.message);
     document.getElementById('events-list').innerHTML = '<div class="empty">Could not load events.</div>';
   }
 }
@@ -195,6 +196,25 @@ async function resetClicks(id) {
   }
 }
 
+function copyLink(id) {
+  const ev = events.find(e => e.id === id);
+  if (!ev) return;
+  const url = trackingURL(id, ev.url);
+  navigator.clipboard.writeText(url).then(() => {
+    const btn = document.getElementById('copy-btn-' + id);
+    if (btn) {
+      btn.textContent = 'Copied!';
+      btn.classList.add('copied');
+      setTimeout(() => {
+        btn.textContent = 'Copy link';
+        btn.classList.remove('copied');
+      }, 2000);
+    }
+  }).catch(() => {
+    prompt('Copy this tracking link:', url);
+  });
+}
+
 function showQR(id) {
   const ev = events.find(e => e.id === id);
   if (!ev) return;
@@ -239,13 +259,14 @@ function render() {
         </div>
         <div class="event-btns">
           <button class="btn" onclick="showQR('${ev.id}')">QR code</button>
+          <button class="btn" id="copy-btn-${ev.id}" onclick="copyLink('${ev.id}')">Copy link</button>
           <button class="btn danger" onclick="deleteEvent('${ev.id}')">Delete</button>
         </div>
       </div>
       <div class="stats-row">
         <div class="click-badge">
           <span class="click-count">${ev.clicks}</span>
-          <span>scans</span>
+          <span>scans / clicks</span>
         </div>
         <button class="btn small" onclick="resetClicks('${ev.id}')">Reset</button>
         <span class="added-date">Added ${new Date(ev.created_at).toLocaleDateString('en-GB')}</span>
